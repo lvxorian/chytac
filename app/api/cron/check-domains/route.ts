@@ -4,7 +4,7 @@ import { checkDomain } from '@/lib/rdap';
 import { sendAlertEmail } from '@/lib/email';
 
 const ENABLE_EMAIL = Boolean(process.env.RESEND_API_KEY && process.env.ALERT_EMAIL_TO);
-const NOTIFIED_RECHECK_INTERVAL_MINUTES = 30;
+const NOTIFIED_RECHECK_INTERVAL_MINUTES = 5;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');

@@ -463,7 +463,7 @@ export default function DashboardPage() {
           <span>
             {notifiedCount > 0 && (
               <>
-                re-check notified domén každých 30 min
+                re-check notified domén každých 5 min
               </>
             )}
           </span>
