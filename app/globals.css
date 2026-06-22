@@ -2,6 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-950 text-gray-100 antialiased;
+:root {
+  --accent: #00d4aa;
+  --accent-glow: rgba(0, 212, 170, 0.08);
+  --danger: #f87171;
+  --warning: #fbbf24;
+}
+
+@layer base {
+  body {
+    @apply bg-[#080c12] text-gray-200 antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-800 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-700;
+  }
+}
+
+@layer components {
+  .glow-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: pulse-dot 2.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--accent); }
+    50% { opacity: 0.5; box-shadow: 0 0 12px var(--accent); }
+  }
+
+  .stat-card {
+    @apply border border-gray-800/60 bg-[#0d1117] rounded-lg px-5 py-4
+           hover:border-gray-700/80 transition-colors duration-200;
+  }
+
+  .table-row {
+    @apply border-b border-gray-800/50 transition-colors duration-150;
+  }
+  .table-row:hover {
+    background: rgba(0, 212, 170, 0.04);
+  }
 }

@@ -3,6 +3,7 @@ import { checkDomain } from '../lib/rdap';
 import { sendAlertEmail } from '../lib/email';
 
 const ENABLE_EMAIL = Boolean(process.env.RESEND_API_KEY && process.env.ALERT_EMAIL_TO);
+const NOTIFIED_RECHECK_INTERVAL_MINUTES = 30;
 
 async function main() {
   const start = new Date();
@@ -10,21 +11,24 @@ async function main() {
 
   await initDB();
 
-  const domains = await sql`
+  // --- Phase 1: Check monitoring domains ---
+  const monitoringDomains = await sql`
     SELECT id, domain_name FROM domains
     WHERE status = 'monitoring'
     LIMIT 100
   `;
 
-  console.log(`Found ${domains.length} domains to check`);
+  console.log(`Monitoring: ${monitoringDomains.length} domains`);
 
   let freeCount = 0;
   let emailsSent = 0;
   let errorCount = 0;
+  let totalChecked = 0;
 
-  for (const domain of domains) {
+  for (const domain of monitoringDomains) {
     try {
       const result = await checkDomain(domain.domain_name);
+      totalChecked++;
 
       await sql`
         INSERT INTO check_logs (domain_id, status_code, rdap_status, is_free, error_message)
@@ -43,7 +47,8 @@ async function main() {
 
         await sql`
           UPDATE domains
-          SET status = 'caught',
+          SET status = 'notified',
+              availability = 'available',
               first_seen_free_at = COALESCE(first_seen_free_at, ${now}),
               last_checked_at = ${now},
               updated_at = ${now}
@@ -59,21 +64,19 @@ async function main() {
             console.error(`Email failed for ${domain.domain_name}:`, emailError);
           }
         } else {
-          console.log(`FREE: ${domain.domain_name} — email skipped (no RESEND_API_KEY set)`);
+          console.log(`FREE: ${domain.domain_name} — email skipped (no RESEND_API_KEY)`);
         }
       } else if (result.isPendingDelete || result.isRedemptionPeriod) {
         const state = result.isPendingDelete ? 'pendingDelete' : 'redemption';
         console.log(`${domain.domain_name}: HTTP ${result.statusCode} (${state} — keep polling)`);
         await sql`
-          UPDATE domains
-          SET last_checked_at = NOW(), updated_at = NOW()
+          UPDATE domains SET last_checked_at = NOW(), updated_at = NOW()
           WHERE id = ${domain.id}
         `;
       } else {
         console.log(`${domain.domain_name}: HTTP ${result.statusCode} (registered)`);
         await sql`
-          UPDATE domains
-          SET last_checked_at = NOW(), updated_at = NOW()
+          UPDATE domains SET last_checked_at = NOW(), updated_at = NOW()
           WHERE id = ${domain.id}
         `;
       }
@@ -98,9 +101,67 @@ async function main() {
     }
   }
 
+  // --- Phase 2: Re-check notified domains (availability tracking) ---
+  const notifiedDomains = await sql.unsafe(`
+    SELECT id, domain_name FROM domains
+    WHERE status = 'notified'
+    AND (
+      last_checked_at IS NULL
+      OR last_checked_at < NOW() - INTERVAL '${NOTIFIED_RECHECK_INTERVAL_MINUTES} minutes'
+    )
+    LIMIT 100
+  `);
+
+  if (notifiedDomains.length > 0) {
+    console.log(`Re-checking notified: ${notifiedDomains.length} domains`);
+
+    for (const domain of notifiedDomains) {
+      try {
+        const result = await checkDomain(domain.domain_name);
+        totalChecked++;
+
+        await sql`
+          INSERT INTO check_logs (domain_id, status_code, rdap_status, is_free, error_message)
+          VALUES (
+            ${domain.id},
+            ${result.statusCode},
+            ${result.rdapStatuses.length > 0 ? JSON.stringify(result.rdapStatuses) : null},
+            ${result.isFree},
+            ${result.error || null}
+          )
+        `;
+
+        if (result.isFree) {
+          console.log(`  ${domain.domain_name}: still available`);
+          await sql`
+            UPDATE domains SET availability = 'available',
+            last_checked_at = NOW(), updated_at = NOW()
+            WHERE id = ${domain.id}
+          `;
+        } else {
+          console.log(`  ${domain.domain_name}: now registered`);
+          await sql`
+            UPDATE domains SET availability = 'registered',
+            last_checked_at = NOW(), updated_at = NOW()
+            WHERE id = ${domain.id}
+          `;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`  ERROR re-checking ${domain.domain_name}: ${message}`);
+        await sql`
+          UPDATE domains SET last_checked_at = NOW(), updated_at = NOW()
+          WHERE id = ${domain.id}
+        `;
+      }
+    }
+  }
+
   const duration = Date.now() - start.getTime();
   console.log(
-    `[${new Date().toISOString()}] Done in ${duration}ms. Checked: ${domains.length}, Free: ${freeCount}, Emails: ${emailsSent}, Errors: ${errorCount}`
+    `[${new Date().toISOString()}] Done in ${duration}ms. Checked: ${totalChecked}, New free: ${freeCount}, Emails: ${emailsSent}, Errors: ${errorCount}`
   );
 
   await sql.end({ timeout: 5 });

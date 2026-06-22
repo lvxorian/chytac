@@ -3,6 +3,9 @@ import { sql, initDB } from '@/lib/db';
 import { checkDomain } from '@/lib/rdap';
 import { sendAlertEmail } from '@/lib/email';
 
+const ENABLE_EMAIL = Boolean(process.env.RESEND_API_KEY && process.env.ALERT_EMAIL_TO);
+const NOTIFIED_RECHECK_INTERVAL_MINUTES = 30;
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
@@ -13,11 +16,12 @@ export async function GET(request: NextRequest) {
 
   try {
     await initDB();
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: 'Database connection failed' }, { status: 500 });
   }
 
-  const domains = await sql`
+  // --- Phase 1: Check monitoring domains ---
+  const monitoringDomains = await sql`
     SELECT id, domain_name FROM domains
     WHERE status = 'monitoring'
     LIMIT 100
@@ -25,10 +29,13 @@ export async function GET(request: NextRequest) {
 
   const results: Record<string, unknown>[] = [];
   let emailsSent = 0;
+  let freeCount = 0;
+  let totalChecked = 0;
 
-  for (const domain of domains) {
+  for (const domain of monitoringDomains) {
     try {
       const result = await checkDomain(domain.domain_name);
+      totalChecked++;
 
       await sql`
         INSERT INTO check_logs (domain_id, status_code, rdap_status, is_free, error_message)
@@ -42,22 +49,26 @@ export async function GET(request: NextRequest) {
       `;
 
       if (result.isFree) {
+        freeCount++;
         const now = new Date();
 
         await sql`
           UPDATE domains
-          SET status = 'caught',
+          SET status = 'notified',
+              availability = 'available',
               first_seen_free_at = COALESCE(first_seen_free_at, ${now}),
               last_checked_at = ${now},
               updated_at = ${now}
           WHERE id = ${domain.id}
         `;
 
-        try {
-          await sendAlertEmail({ domain: domain.domain_name, detectedAt: now });
-          emailsSent++;
-        } catch (emailError) {
-          console.error(`Email failed for ${domain.domain_name}:`, emailError);
+        if (ENABLE_EMAIL) {
+          try {
+            await sendAlertEmail({ domain: domain.domain_name, detectedAt: now });
+            emailsSent++;
+          } catch (emailError) {
+            console.error(`Email failed for ${domain.domain_name}:`, emailError);
+          }
         }
       } else {
         await sql`
@@ -88,17 +99,67 @@ export async function GET(request: NextRequest) {
         WHERE id = ${domain.id}
       `;
 
+      results.push({ id: domain.id, domain: domain.domain_name, error: message });
+    }
+  }
+
+  // --- Phase 2: Re-check notified domains ---
+  const notifiedDomains = await sql.unsafe(`
+    SELECT id, domain_name FROM domains
+    WHERE status = 'notified'
+    AND (
+      last_checked_at IS NULL
+      OR last_checked_at < NOW() - INTERVAL '${NOTIFIED_RECHECK_INTERVAL_MINUTES} minutes'
+    )
+    LIMIT 100
+  `);
+
+  for (const domain of notifiedDomains) {
+    try {
+      const result = await checkDomain(domain.domain_name);
+      totalChecked++;
+
+      await sql`
+        INSERT INTO check_logs (domain_id, status_code, rdap_status, is_free, error_message)
+        VALUES (
+          ${domain.id},
+          ${result.statusCode},
+          ${result.rdapStatuses.length > 0 ? JSON.stringify(result.rdapStatuses) : null},
+          ${result.isFree},
+          ${result.error || null}
+        )
+      `;
+
+      const newAvailability = result.isFree ? 'available' : 'registered';
+
+      await sql`
+        UPDATE domains SET availability = ${newAvailability},
+        last_checked_at = NOW(), updated_at = NOW()
+        WHERE id = ${domain.id}
+      `;
+
       results.push({
         id: domain.id,
         domain: domain.domain_name,
-        error: message,
+        isFree: result.isFree,
+        statusCode: result.statusCode,
+        recheck: true,
+        availability: newAvailability,
       });
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      await sql`
+        UPDATE domains SET last_checked_at = NOW(), updated_at = NOW()
+        WHERE id = ${domain.id}
+      `;
     }
   }
 
   return NextResponse.json({
-    checked: domains.length,
-    free: results.filter((r) => r.isFree).length,
+    checked: totalChecked,
+    free: freeCount,
     emailsSent,
     results,
     timestamp: new Date().toISOString(),

@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS domains (
   id SERIAL PRIMARY KEY,
   domain_name TEXT NOT NULL UNIQUE,
   status TEXT NOT NULL DEFAULT 'monitoring',
+  availability TEXT,
   last_checked_at TIMESTAMPTZ,
   first_seen_free_at TIMESTAMPTZ,
   notes TEXT,

@@ -36,7 +36,7 @@ export async function PATCH(
 
   const { status } = body;
 
-  const validStatuses = ['monitoring', 'free', 'caught', 'error'];
+  const validStatuses = ['monitoring', 'notified', 'error'];
   if (status && !validStatuses.includes(status)) {
     return NextResponse.json(
       { error: `Status must be one of: ${validStatuses.join(', ')}` },

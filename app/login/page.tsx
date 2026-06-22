@@ -35,42 +35,58 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="flex min-h-screen items-center justify-center bg-[#080c12] px-4">
       <div className="w-full max-w-sm">
-        <h1 className="mb-2 text-center text-3xl font-bold tracking-tight text-white">
-          chytac
-        </h1>
-        <p className="mb-8 text-center text-sm text-gray-400">
-          .cz domain drop catcher
-        </p>
+        {/* Logo */}
+        <div className="mb-10 text-center">
+          <div className="flex items-center justify-center gap-2.5 select-none">
+            <div className="glow-dot" />
+            <span className="text-2xl font-bold tracking-tight text-white">
+              chytac
+            </span>
+          </div>
+          <p className="mt-2 font-mono text-[11px] text-gray-600 uppercase tracking-widest">
+            .cz domain catcher
+          </p>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
-              Password
+            <label
+              htmlFor="password"
+              className="mb-1.5 block text-[11px] font-medium text-gray-500 uppercase tracking-wider"
+            >
+              heslo
             </label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="Enter password"
+              className="w-full rounded-lg border border-gray-800 bg-[#0d1117] px-4 py-2.5
+                         font-mono text-sm text-white placeholder-gray-600
+                         focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent/20
+                         transition-colors"
+              placeholder="········"
               autoFocus
               required
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="font-mono text-xs text-red-400">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+            className="w-full rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5
+                       text-sm font-medium text-accent-light
+                       hover:bg-accent/20 hover:border-accent/50
+                       disabled:opacity-30 disabled:cursor-not-allowed
+                       transition-all"
           >
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? 'přihlašování...' : 'přihlásit'}
           </button>
         </form>
       </div>

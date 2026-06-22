@@ -14,6 +14,7 @@ export async function initDB() {
       id SERIAL PRIMARY KEY,
       domain_name TEXT NOT NULL UNIQUE,
       status TEXT NOT NULL DEFAULT 'monitoring',
+      availability TEXT,
       last_checked_at TIMESTAMPTZ,
       first_seen_free_at TIMESTAMPTZ,
       notes TEXT,
@@ -34,6 +35,10 @@ export async function initDB() {
     CREATE INDEX IF NOT EXISTS idx_domains_status ON domains(status);
     CREATE INDEX IF NOT EXISTS idx_check_logs_domain_id ON check_logs(domain_id);
     CREATE INDEX IF NOT EXISTS idx_check_logs_checked_at ON check_logs(checked_at);
+  `);
+
+  await sql.unsafe(`
+    ALTER TABLE domains ADD COLUMN IF NOT EXISTS availability TEXT;
   `);
 }
 
