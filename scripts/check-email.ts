@@ -1,4 +1,5 @@
 import Imap from 'imap';
+import { simpleParser } from 'mailparser';
 import { sql, initDB } from '../lib/db';
 
 const IMAP_HOST = 'imap.seznam.cz';
@@ -42,61 +43,81 @@ async function main() {
     imap = await connectImap(user, pass);
     console.log('Connected');
 
-    await new Promise<void>((resolve, reject) => {
-      imap!.openBox('INBOX', false, (err) => {
-        if (err) return reject(err);
+    const box = await new Promise<Imap.Box>((resolve, reject) => {
+      imap!.openBox('INBOX', false, (err, box) => {
+        if (err) reject(err);
+        else resolve(box);
+      });
+    });
 
-        imap!.search(['UNSEEN'], (err2, uids) => {
-          if (err2) return reject(err2);
+    if (box.messages.new === 0) {
+      console.log('No new messages');
+    } else {
+      const uids = await new Promise<number[]>((resolve, reject) => {
+        imap!.search(['UNSEEN'], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
+        });
+      });
 
-          if (!uids || uids.length === 0) {
-            console.log('No unseen messages');
-            return resolve();
-          }
+      if (uids.length === 0) {
+        console.log('No unseen messages');
+      } else {
+        console.log(`Found ${uids.length} unseen messages`);
 
-          console.log(`Found ${uids.length} unseen messages`);
-          const fetch = imap!.fetch(uids, {
-            bodies: 'HEADER.FIELDS (SUBJECT)',
-            struct: true,
-          });
+        const messages = await new Promise<
+          { uid: number; subject: string }[]
+        >((resolve, reject) => {
+          const results: { uid: number; subject: string }[] = [];
+          const fetch = imap!.fetch(uids, { bodies: '' });
 
           fetch.on('message', (msg) => {
-            let subject = '';
+            let uid = 0;
+            let buffer = Buffer.alloc(0);
+
+            msg.on('attributes', (attrs) => {
+              uid = attrs.uid;
+            });
 
             msg.on('body', (stream) => {
-              let buffer = '';
-              stream.on('data', (chunk: Buffer) => { buffer += chunk.toString('utf-8'); });
-              stream.once('end', () => {
-                const m = buffer.match(/^Subject: (.+)$/im);
-                if (m) subject = m[1].replace(/\r?\n\s*/g, ' ').trim();
+              stream.on('data', (chunk: Buffer) => {
+                buffer = Buffer.concat([buffer, chunk]);
               });
             });
 
             msg.once('end', () => {
-              if (!subject) return;
-
-              if (!subject.includes(SUBJECT_KEYWORD)) {
-                console.log(`  Skip: "${subject.slice(0, 80)}"`);
-                return;
-              }
-
-              const match = subject.match(DOMAIN_REGEX);
-              if (!match) {
-                console.warn(`  Match fail: "${subject}"`);
-                return;
-              }
-
-              const domain = match[1].toLowerCase();
-              console.log(`  Found: ${domain}`);
-              foundDomains.push(domain);
+              simpleParser(buffer, (err, parsed) => {
+                if (!err && parsed.subject) {
+                  results.push({ uid, subject: parsed.subject });
+                }
+              });
             });
           });
 
           fetch.once('error', reject);
-          fetch.once('end', resolve);
+          fetch.once('end', () => resolve(results));
         });
-      });
-    });
+
+        for (const { uid, subject } of messages) {
+          console.log(`  Subject: "${subject.slice(0, 100)}"`);
+
+          if (!subject.includes(SUBJECT_KEYWORD)) {
+            console.log(`    Skip (no keyword)`);
+            continue;
+          }
+
+          const match = subject.match(DOMAIN_REGEX);
+          if (!match) {
+            console.warn(`    Match fail`);
+            continue;
+          }
+
+          const domain = match[1].toLowerCase();
+          console.log(`    Found: ${domain}`);
+          foundDomains.push(domain);
+        }
+      }
+    }
   } catch (err) {
     console.error('IMAP error:', err instanceof Error ? err.message : String(err));
     process.exit(1);
