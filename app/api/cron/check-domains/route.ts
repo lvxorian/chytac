@@ -70,6 +70,12 @@ export async function GET(request: NextRequest) {
             console.error(`Email failed for ${domain.domain_name}:`, emailError);
           }
         }
+      } else if (result.isTransitional) {
+        await sql`
+          UPDATE domains
+          SET last_checked_at = NOW(), updated_at = NOW()
+          WHERE id = ${domain.id}
+        `;
       } else {
         await sql`
           UPDATE domains

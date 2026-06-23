@@ -66,6 +66,14 @@ async function main() {
         } else {
           console.log(`FREE: ${domain.domain_name} — email skipped (no RESEND_API_KEY)`);
         }
+      } else if (result.isTransitional) {
+        console.log(
+          `${domain.domain_name}: HTTP ${result.statusCode} (transitional — keep polling)`
+        );
+        await sql`
+          UPDATE domains SET last_checked_at = NOW(), updated_at = NOW()
+          WHERE id = ${domain.id}
+        `;
       } else if (result.isPendingDelete || result.isRedemptionPeriod) {
         const state = result.isPendingDelete ? 'pendingDelete' : 'redemption';
         console.log(`${domain.domain_name}: HTTP ${result.statusCode} (${state} — keep polling)`);
