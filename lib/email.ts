@@ -22,20 +22,24 @@ export async function sendAlertEmail({ domain, detectedAt }: AlertEmailParams) {
     timeZone: 'Europe/Prague',
   });
 
-  const registrationLink = `https://www.nic.cz/whois/domain/${domain}/`;
+  const registrationLink = `https://www.wedos.cz/domeny/${domain}/registrace`;
+  const whoisLink = `https://www.nic.cz/whois/domain/${domain}/`;
 
   const { data, error } = await resend.emails.send({
     from: `Chytac <${alertFrom}>`,
     to: [alertTo],
-    subject: `DOMAIN FREE: ${domain}`,
+    subject: `DOMÉNA VOLNÁ: ${domain}`,
     html: `
-      <h2>${domain} is now available!</h2>
-      <p>Detected free at: <strong>${formattedDate} (CET/CEST)</strong></p>
-      <p><a href="${registrationLink}">Register now at NIC.cz</a></p>
+      <h2>Doména ${domain} je volná!</h2>
+      <p>Detekována jako volná: <strong>${formattedDate} (CET/CEST)</strong></p>
+      <p><a href="${registrationLink}">Zaregistrovat u WEDOS.cz</a></p>
+      <p style="color:#666;font-size:12px;">
+        <a href="${whoisLink}">WHOIS NIC.cz</a>
+      </p>
       <hr />
-      <p><small>Sent by Chytac drop-catching monitor</small></p>
+      <p style="color:#999;font-size:11px;">Odesláno systémem Chytac</p>
     `,
-    text: `${domain} is available!\n\nDetected at: ${formattedDate}\n\nRegister: ${registrationLink}`,
+    text: `Doména ${domain} je volná!\n\nDetekována: ${formattedDate}\n\nZaregistrovat u WEDOS: ${registrationLink}\nWHOIS: ${whoisLink}`,
   });
 
   if (error) {
