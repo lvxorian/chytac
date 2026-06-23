@@ -111,6 +111,7 @@ export default function DashboardPage() {
   const [addError, setAddError] = useState('');
   const [adding, setAdding] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
 
   const fetchDomains = useCallback(async () => {
@@ -119,6 +120,7 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setDomains(data);
+      setLastRefresh(new Date());
     } catch (err) {
       console.error(err);
     } finally {
@@ -469,7 +471,11 @@ export default function DashboardPage() {
               </>
             )}
           </span>
-          <span>auto-refresh každých 30s</span>
+          <span>
+            {lastRefresh
+              ? `obnoveno ${lastRefresh.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+              : 'načítám...'}
+          </span>
         </div>
       </main>
     </div>
