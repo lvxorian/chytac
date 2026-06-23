@@ -7,10 +7,16 @@ const VERCEL_MAX_DOMAIN_CHECKS = 8;
 const ENABLE_EMAIL = Boolean(process.env.RESEND_API_KEY && process.env.ALERT_EMAIL_TO);
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get('authorization');
+  const { searchParams } = new URL(request.url);
+  const urlSecret = searchParams.get('secret');
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  const isAuthorized =
+    cronSecret &&
+    (authHeader === `Bearer ${cronSecret}` || urlSecret === cronSecret);
+
+  if (!isAuthorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
