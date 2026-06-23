@@ -31,7 +31,7 @@ export async function sendAlertEmail({ domain, detectedAt }: AlertEmailParams) {
     subject: `DOMÉNA VOLNÁ: ${domain}`,
     html: `
       <h2>Doména ${domain} je volná!</h2>
-      <p>Uvolněna: <strong>${formattedDate}</strong></p>
+      <p>Uvolněna: <strong>(${formattedDate})</strong></p>
       <p><a href="${registrationLink}">Zaregistrovat u WEDOS.cz</a></p>
       <p style="color:#666;font-size:12px;">
         <a href="${whoisLink}">WHOIS NIC.cz</a>
@@ -39,7 +39,7 @@ export async function sendAlertEmail({ domain, detectedAt }: AlertEmailParams) {
       <hr />
       <p style="color:#999;font-size:11px;">Odesláno systémem Chytac</p>
     `,
-    text: `Doména ${domain} je volná!\n\nUvolněna: ${formattedDate}\n\nZaregistrovat u WEDOS: ${registrationLink}\nWHOIS: ${whoisLink}`,
+    text: `Doména ${domain} je volná!\n\nUvolněna: (${formattedDate})\n\nZaregistrovat u WEDOS: ${registrationLink}\nWHOIS: ${whoisLink}`,
   });
 
   if (error) {
