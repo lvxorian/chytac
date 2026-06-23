@@ -128,6 +128,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDomains();
+    const interval = setInterval(fetchDomains, 30_000);
+    return () => clearInterval(interval);
   }, [fetchDomains]);
 
   async function handleAdd(e: FormEvent) {
@@ -467,7 +469,7 @@ export default function DashboardPage() {
               </>
             )}
           </span>
-          <span>obnov pro aktualizaci</span>
+          <span>auto-refresh každých 30s</span>
         </div>
       </main>
     </div>
