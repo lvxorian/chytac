@@ -8,9 +8,21 @@ Monitors `.cz` domains via the NIC.cz RDAP API and sends email alerts via Resend
 
 - **Next.js 14** (App Router) — Web UI + API routes
 - **Supabase** (free tier) — PostgreSQL database
-- **GitHub Actions** — Cron job runs every 5 minutes (free)
+- **External cron** (cron-job.org) — Pings Vercel endpoint every 5 minutes (free)
+- **GitHub Actions** — Backup cron, handles bulk checks and notified re-checks (free, no timeout)
 - **Resend** (free tier) — Email alerts (100/day)
 - **Vercel Hobby** — Web UI hosting (free)
+
+### Dual-cron design
+
+Vercel Hobby limits serverless functions to 10 seconds. To work around this:
+
+| Cron | Frequency | Checks | Timeout |
+|---|---|---|---|
+| **cron-job.org** → `/api/cron/check-domains` | Every 5 min | Up to 8 domains (prioritizes least recently checked) | 10s (Vercel limit) |
+| **GitHub Actions** → `scripts/check-domains.ts` | ~1–4 hours | All 100 monitoring domains + notified re-checks | 6 hours |
+
+External cron ensures fast detection. GitHub Actions handles the rest with no timeout.
 
 ## Setup
 
@@ -60,29 +72,40 @@ npm run check-domains
 
 1. Push to GitHub
 2. Import repo in Vercel dashboard
-3. Add environment variables in Vercel project settings
+3. Add all environment variables in Vercel project settings
 4. Deploy (Hobby plan is free)
+5. Note your Vercel domain: `https://<project>.vercel.app`
 
-#### GitHub Actions (Cron Job)
+#### GitHub Actions (Backup Cron)
 
 1. Go to your GitHub repo **Settings > Secrets and variables > Actions**
-2. Add these repository secrets:
-   - `DATABASE_URL` — your Supabase connection pooler URL
-   - `RESEND_API_KEY` — your Resend API key
-   - `ALERT_EMAIL_TO` — your email address
-3. Push to `main` branch — the workflow starts automatically
-4. Verify in **Actions** tab — you'll see runs every 5 minutes
+2. Add repository secrets: `DATABASE_URL`, `RESEND_API_KEY`, `ALERT_EMAIL_TO`
+3. Push to `main` branch — workflow starts automatically
 
-The workflow is defined in `.github/workflows/check-domains.yml`.
+#### cron-job.org (Primary Cron — every 5 minutes)
+
+1. Create a free account at [cron-job.org](https://cron-job.org)
+2. Click **Create Cron Job**
+3. Configure:
+   - **URL**: `https://<your-vercel-domain>.vercel.app/api/cron/check-domains`
+   - **Execution schedule**: Every 5 minutes
+   - **Request method**: GET
+   - **Header**: `Authorization` = `Bearer <your-CRON_SECRET>`
+4. Save — that's it
+
+The cron-job.org service will ping your Vercel endpoint every 5 minutes reliably.
 
 ## How It Works
 
 1. Add `.cz` domains to your watchlist via the web UI
-2. Every 5 minutes, GitHub Actions runs `scripts/check-domains.ts` which queries NIC.cz RDAP for each monitored domain
-3. **HTTP 200** → domain is registered → keep monitoring
-4. **HTTP 404** → domain is free → send email via Resend → mark as "caught" → stop polling
-5. Domains in `pendingDelete`/`redemptionPeriod` are kept in monitoring
-6. No 10-second timeout limit — GitHub Actions allows up to 6 hours per job
+2. Every 5 minutes, cron-job.org pings `/api/cron/check-domains` → checks up to 8 monitoring domains
+3. GitHub Actions runs `scripts/check-domains.ts` periodically with full batch processing
+4. **RDAP check** (NIC.cz API):
+   - **HTTP 200** → parse status (`pendingDelete`, `redemptionPeriod`) → keep monitoring
+   - **HTTP 404** → verify via **WHOIS HEAD request**
+     - WHOIS 404 → domain is truly free → email alert → status `notified`
+     - WHOIS 200 → domain in auction/transition → keep monitoring (no false alarm)
+5. After notification, domain is re-checked every 5 min for availability status (`available` / `registered`)
 
 ## API Endpoints
 
@@ -96,7 +119,7 @@ The workflow is defined in `.github/workflows/check-domains.yml`.
 | DELETE | `/api/domains/[id]` | Remove domain |
 | PATCH | `/api/domains/[id]` | Update domain status |
 | GET | `/api/domains/[id]/logs` | Get check logs for a domain |
-| GET | `/api/cron/check-domains` | Trigger checks manually (secured by `CRON_SECRET`) |
+| GET | `/api/cron/check-domains` | Trigger checks (secured by `CRON_SECRET`) |
 
 ## Security
 
@@ -104,9 +127,26 @@ The workflow is defined in `.github/workflows/check-domains.yml`.
 - Web UI is password-protected (single user, no registration)
 - Auth uses httpOnly JWT cookies
 
+## Domain State Machine
+
+```
+monitoring → RDAP check
+                │
+     ┌──────────┼──────────┐
+     ▼          ▼          ▼
+  RDAP 404   RDAP 200   error
+  +WHOIS 404  (reg/tran)  
+     │          │
+     ▼          ▼
+  notified   monitoring
+  (email!)   (keep polling)
+     │
+     └─ re-check 5min → available / registered
+```
+
 ## Notes
 
-- Rate limiting: 500ms delay between RDAP checks, exponential backoff on 429 responses
-- RDAP `Retry-After` header is respected
+- Rate limiting: 500ms delay between checks, exponential backoff on 429
+- RDAP 404 alone does not mean free — WHOIS HEAD request confirms
 - Only `.cz` domains are accepted
-- All services used are on free tiers — zero cost to run
+- All services on free tiers — zero cost to run
