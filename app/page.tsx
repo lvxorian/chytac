@@ -111,7 +111,6 @@ export default function DashboardPage() {
   const [addError, setAddError] = useState('');
   const [adding, setAdding] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
 
   const fetchDomains = useCallback(async () => {
@@ -120,7 +119,6 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setDomains(data);
-      setLastRefresh(new Date());
     } catch (err) {
       console.error(err);
     } finally {
@@ -202,7 +200,6 @@ export default function DashboardPage() {
 
   // Stats
   const monitoringCount = domains.filter((d) => d.status === 'monitoring').length;
-  const notifiedCount = domains.filter((d) => d.status === 'notified').length;
   const availableCount = domains.filter(
     (d) => d.status === 'notified' && d.availability === 'available'
   ).length;
@@ -462,21 +459,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Footer */}
-        <div className="mt-6 flex items-center justify-between text-[11px] text-gray-700 font-mono">
-          <span>
-            {notifiedCount > 0 && (
-              <>
-                re-check notified domén každých 5 min
-              </>
-            )}
-          </span>
-          <span>
-            {lastRefresh
-              ? `obnoveno ${lastRefresh.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
-              : 'načítám...'}
-          </span>
-        </div>
       </main>
     </div>
   );
