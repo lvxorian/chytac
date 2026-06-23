@@ -16,6 +16,7 @@ function getResend(): Resend {
 export async function sendAlertEmail({ domain, detectedAt }: AlertEmailParams) {
   const resend = getResend();
   const alertTo = process.env.ALERT_EMAIL_TO!;
+  const alertFrom = process.env.ALERT_EMAIL_FROM || 'onboarding@resend.dev';
 
   const formattedDate = detectedAt.toLocaleString('cs-CZ', {
     timeZone: 'Europe/Prague',
@@ -24,7 +25,7 @@ export async function sendAlertEmail({ domain, detectedAt }: AlertEmailParams) {
   const registrationLink = `https://www.nic.cz/whois/domain/${domain}/`;
 
   const { data, error } = await resend.emails.send({
-    from: 'Chytac <alerts@chytac.app>',
+    from: `Chytac <${alertFrom}>`,
     to: [alertTo],
     subject: `DOMAIN FREE: ${domain}`,
     html: `
