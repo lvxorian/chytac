@@ -31,7 +31,7 @@ export async function sendAlertEmail({ domain, detectedAt }: AlertEmailParams) {
     subject: `DOMÉNA VOLNÁ: ${domain}`,
     html: `
       <h2>Doména ${domain} je volná!</h2>
-      <p>Uvolněna: <strong>${formattedDate} (CET/CEST)</strong></p>
+      <p>Uvolněna: <strong>${formattedDate}</strong></p>
       <p><a href="${registrationLink}">Zaregistrovat u WEDOS.cz</a></p>
       <p style="color:#666;font-size:12px;">
         <a href="${whoisLink}">WHOIS NIC.cz</a>
