@@ -35,7 +35,10 @@ export async function GET(request: NextRequest) {
 
   const results: Record<string, unknown>[] = [];
   let emailsSent = 0;
+  let emailsFailed = 0;
+  let emailsSkipped = 0;
   let freeCount = 0;
+  const emailErrors: string[] = [];
 
   for (const domain of monitoringDomains) {
     try {
@@ -70,9 +73,14 @@ export async function GET(request: NextRequest) {
           try {
             await sendAlertEmail({ domain: domain.domain_name, detectedAt: now });
             emailsSent++;
-          } catch (emailError) {
-            console.error(`Email failed for ${domain.domain_name}:`, emailError);
+          } catch (emailError: unknown) {
+            const msg = emailError instanceof Error ? emailError.message : String(emailError);
+            console.error(`Email failed for ${domain.domain_name}:`, msg);
+            emailErrors.push(`${domain.domain_name}: ${msg}`);
+            emailsFailed++;
           }
+        } else {
+          emailsSkipped++;
         }
       } else {
         await sql`
@@ -110,6 +118,10 @@ export async function GET(request: NextRequest) {
     checked: monitoringDomains.length,
     free: freeCount,
     emailsSent,
+    emailsFailed,
+    emailsSkipped,
+    emailErrors: emailErrors.slice(0, 5),
+    enableEmail,
     results,
     timestamp: new Date().toISOString(),
   });
