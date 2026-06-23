@@ -4,9 +4,9 @@ import { checkDomain } from '@/lib/rdap';
 import { sendAlertEmail } from '@/lib/email';
 
 const VERCEL_MAX_DOMAIN_CHECKS = 8;
-const ENABLE_EMAIL = Boolean(process.env.RESEND_API_KEY && process.env.ALERT_EMAIL_TO);
 
 export async function GET(request: NextRequest) {
+  const enableEmail = Boolean(process.env.RESEND_API_KEY && process.env.ALERT_EMAIL_TO);
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get('authorization');
   const { searchParams } = new URL(request.url);
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
           WHERE id = ${domain.id}
         `;
 
-        if (ENABLE_EMAIL) {
+        if (enableEmail) {
           try {
             await sendAlertEmail({ domain: domain.domain_name, detectedAt: now });
             emailsSent++;
