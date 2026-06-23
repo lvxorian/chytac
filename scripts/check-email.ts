@@ -50,28 +50,30 @@ async function main() {
       });
     });
 
-    if (box.messages.new === 0) {
-      console.log('No new messages');
+    if (box.messages.total === 0) {
+      console.log('No messages in inbox');
     } else {
       const uids = await new Promise<number[]>((resolve, reject) => {
-        imap!.search(['UNSEEN'], (err, results) => {
+        imap!.search(['ALL'], (err, results) => {
           if (err) reject(err);
           else resolve(results);
         });
       });
 
       if (uids.length === 0) {
-        console.log('No unseen messages');
+        console.log('No messages');
       } else {
-        console.log(`Found ${uids.length} unseen messages`);
+        console.log(`Found ${uids.length} messages total`);
 
         const messages = await new Promise<
           { uid: number; subject: string }[]
         >((resolve, reject) => {
           const results: { uid: number; subject: string }[] = [];
+          let pending = 0;
           const fetch = imap!.fetch(uids, { bodies: '' });
 
           fetch.on('message', (msg) => {
+            pending++;
             let uid = 0;
             let buffer = Buffer.alloc(0);
 
@@ -90,12 +92,16 @@ async function main() {
                 if (!err && parsed.subject) {
                   results.push({ uid, subject: parsed.subject });
                 }
+                pending--;
+                if (pending === 0) resolve(results);
               });
             });
           });
 
           fetch.once('error', reject);
-          fetch.once('end', () => resolve(results));
+          fetch.once('end', () => {
+            if (pending === 0) resolve(results);
+          });
         });
 
         for (const { uid, subject } of messages) {
