@@ -63,15 +63,15 @@ export async function GET(request: NextRequest) {
           if (err2) return reject(err2);
 
           if (!uids || uids.length === 0) {
+            totalMessages = 0;
             return resolve();
           }
 
           totalMessages = uids.length;
-          let pending = 0;
+          let pending = uids.length;
           const fetch = imap!.fetch(uids, { bodies: [''] });
 
           fetch.on('message', (msg) => {
-            pending++;
             let buffer = Buffer.alloc(0);
 
             msg.on('body', (stream) => {
@@ -82,26 +82,17 @@ export async function GET(request: NextRequest) {
 
             msg.once('end', () => {
               simpleParser(buffer, (parseErr, parsed) => {
-                if (parseErr || !parsed.subject) {
-                  pending--;
-                  if (pending === 0) resolve();
-                  return;
-                }
+                if (!parseErr && parsed.subject) {
+                  const subject = parsed.subject;
 
-                const subject = parsed.subject;
-
-                if (!subject.includes(SUBJECT_KEYWORD)) {
-                  if (subject.includes('aukce')) {
+                  if (subject.includes(SUBJECT_KEYWORD)) {
+                    const match = subject.match(DOMAIN_REGEX);
+                    if (match) {
+                      foundDomains.push(match[1].toLowerCase());
+                    }
+                  } else if (subject.includes('aukce')) {
                     skippedSubjects.push(subject.slice(0, 100));
                   }
-                  pending--;
-                  if (pending === 0) resolve();
-                  return;
-                }
-
-                const match = subject.match(DOMAIN_REGEX);
-                if (match) {
-                  foundDomains.push(match[1].toLowerCase());
                 }
 
                 pending--;
@@ -111,9 +102,6 @@ export async function GET(request: NextRequest) {
           });
 
           fetch.once('error', reject);
-          fetch.once('end', () => {
-            if (pending === 0) resolve();
-          });
         });
       });
     });
