@@ -70,7 +70,7 @@ async function main() {
         >((resolve, reject) => {
           const results: { uid: number; subject: string }[] = [];
           let pending = 0;
-          const fetch = imap!.fetch(uids, { bodies: '' });
+          const fetch = imap!.fetch(uids, { bodies: [''] });
 
           fetch.on('message', (msg) => {
             pending++;

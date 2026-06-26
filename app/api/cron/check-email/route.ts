@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
 
           totalMessages = uids.length;
           let pending = 0;
-          const fetch = imap!.fetch(uids, { bodies: '' });
+          const fetch = imap!.fetch(uids, { bodies: [''] });
 
           fetch.on('message', (msg) => {
             pending++;
