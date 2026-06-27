@@ -68,8 +68,9 @@ export async function GET(request: NextRequest) {
           }
 
           totalMessages = uids.length;
-          let pending = uids.length;
-          const fetch = imap!.fetch(uids, { bodies: [''] });
+          const lastUids = uids.slice(-40);
+          let pending = lastUids.length;
+          const fetch = imap!.fetch(lastUids, { bodies: ['HEADER'] });
 
           fetch.on('message', (msg) => {
             let buffer = Buffer.alloc(0);
